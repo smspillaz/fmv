@@ -204,7 +204,7 @@ class Floor: public Platform::Application {
 };
 
 Floor::Floor(const Arguments& arguments):
-    Platform::Application{arguments, Configuration{}.setTitle("Floor Music Visualiser")},
+    Platform::Application{arguments, Configuration{}.setTitle("FMV")},
     cameraObject(&scene),
     camera(cameraObject),
     visualizerInput(LV::Input::load("mplayer"))
