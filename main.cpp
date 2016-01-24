@@ -43,6 +43,7 @@
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Drawable.hpp>
 #include <Magnum/SceneGraph/Camera3D.hpp>
+#include <Magnum/Timeline.h>
 
 namespace Magnum { namespace Examples {
 
@@ -130,6 +131,7 @@ public:
     Color3 color;
     std::array<float, 100> const &heightMap;
     size_t heightMapIndex;
+    Timeline timeline;
 
     Bar(Object3D &parent,
         Mesh &mesh,
@@ -158,12 +160,14 @@ Bar::Bar(Object3D &parent,
     heightMap(heightMap),
     heightMapIndex(heightMapIndex)
 {
+    timeline.start();
 }
 
 void Bar::draw(Matrix4 const &transformationMatrix,
                SceneGraph::Camera3D &camera)
 {
     Matrix4 transform(Matrix4::translation(Vector3(-0.5f, -0.5f, -1.4f * 2)) *
+                      Matrix4::rotationX(Deg(sin(timeline.previousFrameTime()) * 5.0)) *
                       transformationMatrix *
                       Matrix4::scaling(Vector3(1.0f, heightMap[heightMapIndex], 1.0f)));
 
@@ -171,6 +175,8 @@ void Bar::draw(Matrix4 const &transformationMatrix,
           .setAmbientColor(Color4(Color3::fromHSV(color.hue(), 1.0f, 0.3f), 0.0f))
           .setTransformationMatrix(transform)
           .setNormalMatrix(transform.rotationScaling());
+
+    timeline.nextFrame();
 
     mesh.draw(shader);
 }
