@@ -27,6 +27,13 @@
 
 #include <array>
 
+#include <iostream>
+
+#include <libvisual/libvisual.h>
+#include <libvisual/lv_common.h>
+#include <libvisual/lv_input.h>
+#include <libvisual/lv_buffer.h>
+
 #include <Magnum/Buffer.h>
 #include <Magnum/DefaultFramebuffer.h>
 #include <Magnum/Renderer.h>
@@ -47,26 +54,6 @@ namespace Magnum { namespace Examples {
 
 typedef SceneGraph::Scene<SceneGraph::MatrixTransformation3D> Scene3D;
 typedef SceneGraph::Object<SceneGraph::MatrixTransformation3D> Object3D;
-
-class Floor: public Platform::Application {
-    public:
-        explicit Floor(const Arguments& arguments);
-
-    private:
-        void drawEvent() override;
-
-        Scene3D scene;
-        SceneGraph::DrawableGroup3D drawables;
-        Object3D cameraObject;
-        SceneGraph::Camera3D camera;
-
-        Buffer _vertexBuffer, _indexBuffer;
-        Mesh _mesh;
-
-        Shaders::Phong _shader;
-
-        std::array<float, 100> heights;
-};
 
 static Trade::MeshData3D barPrimitive(Vector3 const &d) {
     return Trade::MeshData3D(MeshPrimitive::Triangles, {
@@ -182,26 +169,47 @@ Bar::Bar(Object3D &parent,
 void Bar::draw(Matrix4 const &transformationMatrix,
                SceneGraph::Camera3D &camera)
 {
-    Matrix4 transform(Matrix4::translation(Vector3(-0.5f, -0.5f, -1.2f * 2)) *
+    Matrix4 transform(Matrix4::translation(Vector3(-0.5f, -0.5f, -1.4f * 2)) *
                       transformationMatrix *
                       Matrix4::scaling(Vector3(1.0f, heightMap[heightMapIndex], 1.0f)));
 
-    shader.setLightColor(Color3{1.0f})
-          .setDiffuseColor(color)
-          .setAmbientColor(Color3::fromHSV(color.hue(), 1.0f, 0.3f))
+    shader.setDiffuseColor(Color4(color, 0.0f))
+          .setAmbientColor(Color4(Color3::fromHSV(color.hue(), 1.0f, 0.3f), 0.0f))
           .setTransformationMatrix(transform)
-          .setNormalMatrix(transform.rotationScaling())
-          .setProjectionMatrix(camera.projectionMatrix())
-          .setLightPosition({0.5f, 1.0f, -0.5f});
+          .setNormalMatrix(transform.rotationScaling());
 
     mesh.draw(shader);
 }
 
+class Floor: public Platform::Application {
+    public:
+        explicit Floor(const Arguments& arguments);
+
+    private:
+        void drawEvent() override;
+
+        Scene3D scene;
+        SceneGraph::DrawableGroup3D drawables;
+        Object3D cameraObject;
+        SceneGraph::Camera3D camera;
+
+        Buffer _vertexBuffer, _indexBuffer;
+        Mesh _mesh;
+
+        Shaders::Phong _shader;
+
+        std::array<float, 100> heights;
+
+        LV::InputPtr visualizerInput;
+};
+
 Floor::Floor(const Arguments& arguments):
     Platform::Application{arguments, Configuration{}.setTitle("Floor Music Visualiser")},
     cameraObject(&scene),
-    camera(cameraObject)
+    camera(cameraObject),
+    visualizerInput(LV::Input::load("mplayer"))
 {
+    visualizerInput->realize();
     Renderer::enable(Renderer::Feature::DepthTest);
     Renderer::enable(Renderer::Feature::FaceCulling);
 
@@ -243,18 +251,68 @@ Floor::Floor(const Arguments& arguments):
     setMinimalLoopPeriod(16);
 }
 
+constexpr static int sample(size_t index) {
+    return static_cast<int>(std::exp((index / 10.0) * log(255.0)));
+}
+
+constexpr static const std::array<int, 10> SampleRanges = {
+    sample(1),
+    sample(2),
+    sample(3),
+    sample(4),
+    sample(5),
+    sample(6),
+    sample(7),
+    sample(8),
+    sample(9),
+    sample(10)
+};
+
 void Floor::drawEvent() {
     defaultFramebuffer.clear(FramebufferClear::Color|FramebufferClear::Depth);
+
+    _shader.setLightColor(Color3{1.0f})
+           .setProjectionMatrix(camera.projectionMatrix())
+           .setLightPosition({0.5f, 1.0f, -0.5f});
+
 
     camera.draw(drawables);
 
     swapBuffers();
     redraw();
 
+    visualizerInput->run();
+    auto const &audio = visualizerInput->get_audio();
+    auto pcm_buffer = LV::Buffer::create(512 * sizeof(float));
+    auto freq_buffer = LV::Buffer::create(256 * sizeof(float));
+    const_cast<LV::Audio *>(&audio)->get_sample_mixed_simple(pcm_buffer,
+                                                             2,
+                                                             VISUAL_AUDIO_CHANNEL_LEFT,
+                                                             VISUAL_AUDIO_CHANNEL_RIGHT,
+                                                             nullptr);
+    LV::Audio::get_spectrum_for_sample(freq_buffer, pcm_buffer, true);
+
+    float *frequenciesData = static_cast<float *>(freq_buffer->get_data());
+
+
     /* Prepare height-map - first row is all random, the next rows follow on
      * from the previous height */
     for (size_t i = 0; i < 10; ++i) {
-        heights[i] = heights[i] * 0.9f + ((rand() % 40) / 100.0f) * 0.1f;
+        /* Go through the sample ranges until we reach the frequency with the
+         * highest amplitude in the current sample range */
+        float highestAmplitudeInRange = 0.0f;
+        const int sampleRangeStart = SampleRanges[i];
+        const int sampleRangeEnd = SampleRanges[i + 1];
+
+        for (int currentSampleFrequency = sampleRangeStart;
+             currentSampleFrequency <= sampleRangeEnd;
+             currentSampleFrequency++) {
+            if (frequenciesData[currentSampleFrequency] > highestAmplitudeInRange) {
+                highestAmplitudeInRange = frequenciesData[currentSampleFrequency];
+            }
+        }
+
+        heights[i] = heights[i] * 0.5f + (highestAmplitudeInRange * 0.5f) + 0.05f;
     }
 
     for (size_t i = 0; i < 10; ++i) {
@@ -268,6 +326,10 @@ void Floor::drawEvent() {
 
 int main(int argc, char **argv)
 {
+    LV::System::init(argc, argv);
     Magnum::Examples::Floor app(Magnum::Examples::Floor::Arguments(argc, argv));
-    return app.exec();
+    int code = app.exec();
+    LV::System::destroy();
+
+    return code;
 }
