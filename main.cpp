@@ -293,8 +293,8 @@ Bar::Bar(Object3D &parent,
     shader(shader),
     color(color),
     heightMap(heightMap),
-    heightMapIndex(heightMapIndex),
-    intensity(intensity)
+    intensity(intensity),
+    heightMapIndex(heightMapIndex)
 {
     timeline.start();
 }
@@ -304,7 +304,7 @@ void Bar::draw(Matrix4 const &transformationMatrix,
 {
     Matrix4 transform(Matrix4::translation(Vector3(-0.5f, -0.5f, -1.4f * 2)) *
                       Matrix4::rotationX(Deg(10)) *
-                      Matrix4::rotationX(Deg((static_cast<float>(sin(intensity + timeline.previousFrameTime() * 0.2)) + 1.0f) * 5.0)) *
+                      Matrix4::rotationX(Deg((static_cast<float>(sin(intensity + timeline.previousFrameTime() * 0.2f)) + 1.0f) * 5.0f)) *
                       Matrix4::translation(Vector3(0.0f,
                                                    (static_cast<float>(-sin(intensity)) - 1.0f) * 0.1f,
                                                    (static_cast<float>(-sin(intensity)) + 1.0f) * 0.3f)) *
@@ -315,7 +315,7 @@ void Bar::draw(Matrix4 const &transformationMatrix,
           .setProjectionMatrix(camera.projectionMatrix())
           .setNormalMatrix(transform.rotationScaling())
           .setLightPosition({0.5f, 0.5f, 1.0f})
-          .setColor(Color4(color, heightMap[heightMapIndex] * (1.0 - (heightMapIndex / 10) / 50.0f)));
+          .setColor(Color4(color, heightMap[heightMapIndex] * (1.0f - (heightMapIndex / 10) / 50.0f)));
 
     timeline.nextFrame();
 
@@ -350,8 +350,8 @@ Floor::Floor(const Arguments& arguments):
     Platform::Application{arguments, Configuration{}.setTitle("FMV")},
     cameraObject(&scene),
     camera(cameraObject),
-    visualizerInput(LV::Input::load("mplayer")),
-    intensity(0.f)
+    intensity(0.0f),
+    visualizerInput(LV::Input::load("mplayer"))
 {
     visualizerInput->realize();
     Renderer::enable(Renderer::Feature::DepthTest);
@@ -491,7 +491,7 @@ void Floor::drawEvent() {
         currentIntensity += heights[i] / 10.0f;
     }
 
-    intensity = intensity * 0.7 + currentIntensity * 0.3;
+    intensity = intensity * 0.7f + currentIntensity * 0.3f;
 
     for (size_t i = 0; i < 10; ++i) {
         for (size_t j = 1; j < 50; ++j) {
