@@ -18,8 +18,8 @@ include_directories(SYSTEM
                     ${MAGNUM_APPLICATION_INCLUDE_DIRS}
                     ${LIBVISUAL_INCLUDE_DIRS})
 
-add_executable(magnum-triangle main.cpp)
-target_link_libraries(magnum-triangle
+add_executable(fmv main.cpp)
+target_link_libraries(fmv
     ${MAGNUM_APPLICATION_LIBRARIES}
     ${MAGNUM_LIBRARIES}
     ${MAGNUM_SHADERS_LIBRARIES}

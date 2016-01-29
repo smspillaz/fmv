@@ -28,15 +28,20 @@
 #include <libvisual/lv_input.h>
 #include <libvisual/lv_buffer.h>
 
+#include <Magnum/AbstractShaderProgram.h>
 #include <Magnum/Buffer.h>
+#include <Magnum/Context.h>
 #include <Magnum/DefaultFramebuffer.h>
 #include <Magnum/Renderer.h>
+#include <Magnum/Shader.h>
+#include <Magnum/Version.h>
 #include <Magnum/MeshTools/Interleave.h>
 #include <Magnum/MeshTools/CompressIndices.h>
 #include <Magnum/MeshTools/Transform.h>
 #include <Magnum/Platform/Sdl2Application.h>
 #include <Magnum/Primitives/Cube.h>
 #include <Magnum/Shaders/Phong.h>
+#include <Magnum/Shaders/Flat.h>
 #include <Magnum/Trade/MeshData3D.h>
 #include <Magnum/SceneGraph/SceneGraph.h>
 #include <Magnum/SceneGraph/Scene.h>
@@ -44,6 +49,10 @@
 #include <Magnum/SceneGraph/Drawable.hpp>
 #include <Magnum/SceneGraph/Camera3D.hpp>
 #include <Magnum/Timeline.h>
+#include "Magnum/Shaders/Generic.h"
+
+#include </home/smspillaz/Source/magnum/src/Magnum/Shaders/Implementation/CreateCompatibilityShader.h>
+
 
 namespace Magnum { namespace Examples {
 
@@ -121,24 +130,149 @@ static Trade::MeshData3D barPrimitive(Vector3 const &d) {
     }}, {});
 }
 
+class BarShader :
+    public AbstractShaderProgram
+{
+public:
+    Int colorUniform;
+    Int lightUniform;
+    Int modelviewUniform;
+    Int projectionUniform;
+    Int normalUniform;
+
+    typedef typename Shaders::Generic<3>::Position Position;
+    typedef Attribute<4, Vector3> Barycentric;
+
+    BarShader & setColor(Color4 color) {
+        setUniform(colorUniform, color);
+        return *this;
+    }
+
+    BarShader & setLightPosition(Vector3 position) {
+        setUniform(lightUniform, position);
+        return *this;
+    }
+
+    BarShader & setModelviewMatrix(const MatrixTypeFor<3, Float>& matrix) {
+        setUniform(modelviewUniform, matrix);
+        return *this;
+    }
+
+    BarShader & setNormalMatrix(const Matrix3x3 &matrix) {
+        setUniform(normalUniform, matrix);
+        return *this;
+    }
+
+    BarShader & setProjectionMatrix(const MatrixTypeFor<3, Float> &matrix) {
+        setUniform(projectionUniform, matrix);
+        return *this;
+    }
+
+    explicit BarShader() {
+        const Version version = Context::current().supportedVersion({Version::GL320, Version::GL310, Version::GL300, Version::GL210});
+
+        Shader vert(version, Shader::Type::Vertex);
+        Shader frag(version, Shader::Type::Fragment);
+
+        const char *fragment_shader_source = \
+                "varying vec4 varyingColor;\n" \
+                "varying vec4 varyingPosition;\n" \
+                "varying vec3 varyingBarycentric;\n" \
+                "void main() {\n" \
+                "    /* Determine how far away we are from 0.5, 0.5 and multiply varyingColor by that */\n" \
+                "    float distance = varyingPosition.y;\n" \
+                "    if (any(lessThan(vec3(varyingBarycentric.xz, 1), vec3(0.02)))) {\n" \
+                "        gl_FragColor = varyingColor;\n"
+                "    } else {\n" \
+                "        vec4 mixFactor = varyingColor * mix((1.0 - distance), 1.0, varyingColor.a * 0.2);\n" \
+                "        vec4 highlight = varyingColor * 0.2;\n" \
+                "        gl_FragColor = mixFactor + highlight;\n" \
+                "    }\n"
+                "}\n";
+
+        const char *vertex_shader_source = \
+                "uniform mat4 modelview;\n" \
+                "uniform mat4 projection;\n" \
+                "uniform mat3 normalMatrix;\n" \
+                "uniform vec4 color;\n"\
+                "uniform vec3 lightPosition;\n" \
+                "attribute vec4 position;\n" \
+                "attribute vec3 normal;\n" \
+                "attribute vec3 barycentric;\n"
+                "varying vec4 varyingColor;\n" \
+                "varying vec4 varyingPosition;\n" \
+                "varying vec3 varyingBarycentric;\n" \
+                "void main() {\n" \
+                "    /* Transform normal to eye co-ordinates */\n" \
+                "    vec3 eyeNormal = normalMatrix * normal;\n" \
+                "    /* Transform position to eye co-ordinates, but don't project it yet */\n" \
+                "    vec4 eyePosition = modelview * position;\n" \
+                "    vec3 eyePositionHomogenized = eyePosition.xyz / eyePosition.w;\n" \
+                "    /* Get difference from light position to eye position - this gives us the direction the light is facing */\n" \
+                "    vec3 lightDirection = normalize(lightPosition - eyePositionHomogenized);\n" \
+                "    /* Now get the intensity of the light - this will just be the dot product of the eye normal and light direction *\n" \
+                "     * If it is facing in the same direction, the light will be at its most intense. We can't have negative lighting so *\n" \
+                "     * cap it at a minimum of zero */\n" \
+                "    float intensity = max(0.0, dot(eyeNormal, lightDirection));\n" \
+                "    /* Calculate specular component, by getting the reflection direction between *\n" \
+                "     * the surface and the viewing angle and computing the dot product between the *\n" \
+                "     * two. The dot product represents the cosine of the angle between the two, so the *\n" \
+                "     * smaller it is, the more shiny this surface will be */\n" \
+                "    vec3 reflection = reflect(-lightDirection, eyeNormal);\n" \
+                "    float reflectionAngle = max(0.0, dot(reflection, eyeNormal));\n" \
+                "    /* Calculate the diffuse lighting and add ambient and specular components */\n" \
+                "    varyingColor.xyz = (color.xyz * intensity * 3 + color.xyz * 0.2 + pow(reflectionAngle, 128) * vec3(1.0f)) * color.a;\n" \
+                "    varyingColor.a = color.a;\n" \
+                "    varyingPosition = position;\n" \
+                "    varyingBarycentric = barycentric;\n" \
+                "    gl_Position = projection * eyePosition;\n" \
+                "}\n";
+
+        vert.addSource(vertex_shader_source);
+        frag.addSource(fragment_shader_source);
+
+        CORRADE_INTERNAL_ASSERT_OUTPUT(Shader::compile({vert, frag}));
+
+        attachShaders({vert, frag});
+
+        {
+            bindAttributeLocation(Shaders::Generic<3>::Position::Location, "position");
+            bindAttributeLocation(Shaders::Generic<3>::Normal::Location, "normal");
+            bindAttributeLocation(Barycentric::Location, "barycentric");
+        }
+
+        CORRADE_INTERNAL_ASSERT_OUTPUT(link());
+
+        {
+            modelviewUniform = uniformLocation("modelview");
+            projectionUniform = uniformLocation("projection");
+            colorUniform = uniformLocation("color");
+            lightUniform = uniformLocation("lightPosition");
+            normalUniform = uniformLocation("normalMatrix");
+        }
+    }
+};
+
 class Bar:
     public Object3D,
     public SceneGraph::Drawable3D
 {
 public:
     Mesh &mesh;
-    Shaders::Phong &shader;
+    BarShader &shader;
     Color3 color;
-    std::array<float, 100> const &heightMap;
+    std::array<float, 500> const &heightMap;
+    float &intensity;
     size_t heightMapIndex;
     Timeline timeline;
 
     Bar(Object3D &parent,
         Mesh &mesh,
-        Shaders::Phong &shader,
+        BarShader &shader,
         Color3 const &color,
         SceneGraph::DrawableGroup3D &group,
-        std::array<float, 100> const &heightMap,
+        std::array<float, 500> const &heightMap,
+        float &intensity,
         size_t heightMapIndex);
 
     void draw(Matrix4 const &transformationMatrix,
@@ -147,10 +281,11 @@ public:
 
 Bar::Bar(Object3D &parent,
          Mesh &mesh,
-         Shaders::Phong &shader,
+         BarShader &shader,
          Color3 const &color,
          SceneGraph::DrawableGroup3D &group,
-         std::array<float, 100> const &heightMap,
+         std::array<float, 500> const &heightMap,
+         float &intensity,
          size_t heightMapIndex):
     Object3D(&parent),
     SceneGraph::Drawable3D(*this, &group),
@@ -158,7 +293,8 @@ Bar::Bar(Object3D &parent,
     shader(shader),
     color(color),
     heightMap(heightMap),
-    heightMapIndex(heightMapIndex)
+    heightMapIndex(heightMapIndex),
+    intensity(intensity)
 {
     timeline.start();
 }
@@ -167,14 +303,19 @@ void Bar::draw(Matrix4 const &transformationMatrix,
                SceneGraph::Camera3D &camera)
 {
     Matrix4 transform(Matrix4::translation(Vector3(-0.5f, -0.5f, -1.4f * 2)) *
-                      Matrix4::rotationX(Deg(sin(timeline.previousFrameTime()) * 5.0)) *
+                      Matrix4::rotationX(Deg(10)) *
+                      Matrix4::rotationX(Deg((static_cast<float>(sin(intensity + timeline.previousFrameTime() * 0.2)) + 1.0f) * 5.0)) *
+                      Matrix4::translation(Vector3(0.0f,
+                                                   (static_cast<float>(-sin(intensity)) - 1.0f) * 0.1f,
+                                                   (static_cast<float>(-sin(intensity)) + 1.0f) * 0.3f)) *
                       transformationMatrix *
                       Matrix4::scaling(Vector3(1.0f, heightMap[heightMapIndex], 1.0f)));
 
-    shader.setDiffuseColor(Color4(color, 0.0f))
-          .setAmbientColor(Color4(Color3::fromHSV(color.hue(), 1.0f, 0.3f), 0.0f))
-          .setTransformationMatrix(transform)
-          .setNormalMatrix(transform.rotationScaling());
+    shader.setModelviewMatrix(transform)
+          .setProjectionMatrix(camera.projectionMatrix())
+          .setNormalMatrix(transform.rotationScaling())
+          .setLightPosition({0.5f, 0.5f, 1.0f})
+          .setColor(Color4(color, heightMap[heightMapIndex] * (1.0 - (heightMapIndex / 10) / 50.0f)));
 
     timeline.nextFrame();
 
@@ -196,9 +337,11 @@ class Floor: public Platform::Application {
         Buffer _vertexBuffer, _indexBuffer;
         Mesh _mesh;
 
-        Shaders::Phong _shader;
+        BarShader _shader;
 
-        std::array<float, 100> heights;
+        std::array<float, 500> heights;
+
+        float intensity;
 
         LV::InputPtr visualizerInput;
 };
@@ -207,15 +350,50 @@ Floor::Floor(const Arguments& arguments):
     Platform::Application{arguments, Configuration{}.setTitle("FMV")},
     cameraObject(&scene),
     camera(cameraObject),
-    visualizerInput(LV::Input::load("mplayer"))
+    visualizerInput(LV::Input::load("mplayer")),
+    intensity(0.f)
 {
     visualizerInput->realize();
     Renderer::enable(Renderer::Feature::DepthTest);
-    Renderer::enable(Renderer::Feature::FaceCulling);
+    Renderer::enable(Renderer::Feature::Blending);
+    Renderer::disable(Renderer::Feature::FaceCulling);
+    Renderer::setBlendFunction(Renderer::BlendFunction::One, Renderer::BlendFunction::OneMinusSourceAlpha);
 
     Trade::MeshData3D cube = barPrimitive(Vector3(1.0f, 1.0f, 1.0f));
 
-    _vertexBuffer.setData(MeshTools::interleave(cube.positions(0), cube.normals(0)), BufferUsage::StaticDraw);
+    std::array<Vector3, 24> barycentric = {{
+                                   {1.0f, 0.0f, 0.0f},
+                                   {0.0f, 1.0f, 0.0f},
+                                   {0.0f, 0.0f, 1.0f},
+                                   {0.0f, 1.0f, 0.0f},
+
+                                   {1.0f, 0.0f, 0.0f},
+                                   {0.0f, 1.0f, 0.0f},
+                                   {0.0f, 0.0f, 1.0f},
+                                   {0.0f, 1.0f, 0.0f},
+
+                                   {1.0f, 0.0f, 0.0f},
+                                   {0.0f, 1.0f, 0.0f},
+                                   {0.0f, 0.0f, 1.0f},
+                                   {0.0f, 1.0f, 0.0f},
+
+                                   {1.0f, 0.0f, 0.0f},
+                                   {0.0f, 1.0f, 0.0f},
+                                   {0.0f, 0.0f, 1.0f},
+                                   {0.0f, 1.0f, 0.0f},
+
+                                   {1.0f, 0.0f, 0.0f},
+                                   {0.0f, 1.0f, 0.0f},
+                                   {0.0f, 0.0f, 1.0f},
+                                   {0.0f, 1.0f, 0.0f},
+
+                                   {1.0f, 0.0f, 0.0f},
+                                   {0.0f, 1.0f, 0.0f},
+                                   {0.0f, 0.0f, 1.0f},
+                                   {0.0f, 1.0f, 0.0f}
+                               }};
+
+    _vertexBuffer.setData(MeshTools::interleave(cube.positions(0), cube.normals(0), barycentric), BufferUsage::StaticDraw);
 
     Containers::Array<char> indexData;
     Mesh::IndexType indexType;
@@ -225,11 +403,11 @@ Floor::Floor(const Arguments& arguments):
 
     _mesh.setPrimitive(cube.primitive())
         .setCount(cube.indices().size())
-        .addVertexBuffer(_vertexBuffer, 0, Shaders::Phong::Position{}, Shaders::Phong::Normal{})
+        .addVertexBuffer(_vertexBuffer, 0, Shaders::Generic<3>::Position{}, Shaders::Generic<3>::Normal{}, BarShader::Barycentric{})
         .setIndexBuffer(_indexBuffer, 0, indexType, indexStart, indexEnd);
 
     auto step = 18;
-    for (size_t i = 0; i < 10; ++i) {
+    for (size_t i = 0; i < 50; ++i) {
         for (size_t j = 0; j < 10; ++j) {
             (new Bar(cameraObject,
                      _mesh,
@@ -237,6 +415,7 @@ Floor::Floor(const Arguments& arguments):
                      Color3::fromHSV(Deg(j * step + i * step * 0.1), 1.0f, 1.0f),
                      drawables,
                      heights,
+                     intensity,
                      i * 10 + j))
                 ->scale(Vector3(0.1, 1.0, 0.1))
                 .translate(Vector3(0.1 * j, 0.0, -0.1 * i));
@@ -244,7 +423,7 @@ Floor::Floor(const Arguments& arguments):
         }
     }
 
-    camera.setProjectionMatrix(Matrix4::perspectiveProjection(20.0_degf, 1.0f, 0.01f, 100.0f))
+    camera.setProjectionMatrix(Matrix4::perspectiveProjection(20.0_degf, 1.0f, 0.01f, 50.0f))
           .setViewport(defaultFramebuffer.viewport().size());
 
     setSwapInterval(1);
@@ -271,11 +450,6 @@ constexpr static const std::array<int, 10> SampleRanges = {
 void Floor::drawEvent() {
     defaultFramebuffer.clear(FramebufferClear::Color|FramebufferClear::Depth);
 
-    _shader.setLightColor(Color3{1.0f})
-           .setProjectionMatrix(camera.projectionMatrix())
-           .setLightPosition({0.5f, 1.0f, -0.5f});
-
-
     camera.draw(drawables);
 
     swapBuffers();
@@ -293,7 +467,7 @@ void Floor::drawEvent() {
     LV::Audio::get_spectrum_for_sample(freq_buffer, pcm_buffer, true);
 
     float *frequenciesData = static_cast<float *>(freq_buffer->get_data());
-
+    float currentIntensity = 0.0f;
 
     /* Prepare height-map - first row is all random, the next rows follow on
      * from the previous height */
@@ -312,11 +486,15 @@ void Floor::drawEvent() {
             }
         }
 
-        heights[i] = heights[i] * 0.5f + (highestAmplitudeInRange * 0.5f) + 0.05f;
+        heights[i] = heights[i] * 0.6f + (highestAmplitudeInRange * 0.4f) + 0.05f;
+
+        currentIntensity += heights[i] / 10.0f;
     }
 
+    intensity = intensity * 0.7 + currentIntensity * 0.3;
+
     for (size_t i = 0; i < 10; ++i) {
-        for (size_t j = 1; j < 10; ++j) {
+        for (size_t j = 1; j < 50; ++j) {
             heights[j * 10 + i] = (heights[j * 10 + i] / 2.0f) + (heights[(j - 1) * 10 + i] / 2.0f);
         }
     }
