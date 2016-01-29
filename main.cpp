@@ -235,21 +235,17 @@ public:
 
         attachShaders({vert, frag});
 
-        {
-            bindAttributeLocation(Shaders::Generic<3>::Position::Location, "position");
-            bindAttributeLocation(Shaders::Generic<3>::Normal::Location, "normal");
-            bindAttributeLocation(Barycentric::Location, "barycentric");
-        }
+        bindAttributeLocation(Shaders::Generic<3>::Position::Location, "position");
+        bindAttributeLocation(Shaders::Generic<3>::Normal::Location, "normal");
+        bindAttributeLocation(Barycentric::Location, "barycentric");
 
         CORRADE_INTERNAL_ASSERT_OUTPUT(link());
 
-        {
-            modelviewUniform = uniformLocation("modelview");
-            projectionUniform = uniformLocation("projection");
-            colorUniform = uniformLocation("color");
-            lightUniform = uniformLocation("lightPosition");
-            normalUniform = uniformLocation("normalMatrix");
-        }
+        modelviewUniform = uniformLocation("modelview");
+        projectionUniform = uniformLocation("projection");
+        colorUniform = uniformLocation("color");
+        lightUniform = uniformLocation("lightPosition");
+        normalUniform = uniformLocation("normalMatrix");
     }
 };
 
