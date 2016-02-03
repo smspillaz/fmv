@@ -169,7 +169,7 @@ public:
         const char *fss = "uniform sampler2D textureUnit;\n" \
                           "uniform float intensity;\n" \
                           "uniform vec2 dimensions;\n" \
-                          "varying vec3 vTexCoord;\n" \
+                          "varying vec2 vTexCoord;\n" \
                           "void main() {\n" \
                           "    vec2 center = dimensions / 2.0;\n" \
                           "    vec2 vectorPointingToCenter = vec2(center - vTexCoord * dimensions);\n" \
