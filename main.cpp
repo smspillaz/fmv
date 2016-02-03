@@ -57,7 +57,9 @@
 #include <Magnum/PixelStorage.h>
 #include <Magnum/TextureFormat.h>
 
-namespace Magnum { namespace Examples {
+namespace FMV {
+
+using namespace Magnum;
 
 typedef SceneGraph::Scene<SceneGraph::MatrixTransformation3D> Scene3D;
 typedef SceneGraph::Object<SceneGraph::MatrixTransformation3D> Object3D;
@@ -694,12 +696,12 @@ void Floor::drawEvent() {
     redraw();
 }
 
-}}
+}
 
 int main(int argc, char **argv)
 {
     LV::System::init(argc, argv);
-    Magnum::Examples::Floor app(Magnum::Examples::Floor::Arguments(argc, argv));
+    FMV::Floor app(FMV::Floor::Arguments(argc, argv));
     int code = app.exec();
     LV::System::destroy();
 
