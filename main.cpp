@@ -136,6 +136,79 @@ static Trade::MeshData3D barPrimitive(Vector3 const &d) {
     }}, {});
 }
 
+class ZoomBlurShader :
+    public AbstractShaderProgram
+{
+public:
+    Int intensityUniform;
+    Int dimensionsUniform;
+    Int textureUniform;
+
+    ZoomBlurShader & setIntensity(float intensity) {
+        setUniform(intensityUniform, intensity);
+        return *this;
+    }
+
+    ZoomBlurShader & setTexture(Magnum::Texture2D &texture) {
+        texture.bind(0);
+        return *this;
+    }
+
+    explicit ZoomBlurShader() :
+        intensityUniform(0)
+    {
+        const Version version = Context::current().supportedVersion({Version::GL320, Version::GL310, Version::GL300, Version::GL210});
+
+        const char *vss = "attribute vec4 position;\n" \
+                          "attribute vec2 texCoord;\n" \
+                          "varying vec2 vTexCoord;\n" \
+                          "void main() {\n" \
+                          "    vTexCoord = texCoord;\n" \
+                          "    gl_Position = position;\n" \
+                          "}\n";
+        const char *fss = "uniform sampler2D textureUnit;\n" \
+                          "uniform float intensity;\n" \
+                          "uniform vec2 dimensions;\n" \
+                          "varying vec3 vTexCoord;\n" \
+                          "void main() {\n" \
+                          "    vec2 center = dimensions / 2.0;\n" \
+                          "    vec2 vectorPointingToCenter = vec2(center - vTexCoord * dimensions);\n" \
+                          "    vec4 total = vec4(0, 0, 0, 0);\n"
+                          "    for (float i = 0.0; i < 40.0; i += 1.0) {\n" \
+                          "        float pc = i / 40.0;\n" \
+                          "        vec2 offset = ((pc * vectorPointingToCenter) / dimensions) * intensity;\n" \
+                          "        vec4 sample = texture2D(textureUnit, vTexCoord + offset);\n" \
+                          "        sample.rgb *= sample.a;\n" \
+                          "        total += (sample * 4.0 * (pc - pc * pc)) / 40.0f;\n" \
+                          "    }\n"
+                          "    gl_FragColor = total;\n" \
+                          "    gl_FragColor.rgb /= (total.a + 0.0000001);\n"
+                          "}\n";
+
+        Shader vertex(version, Shader::Type::Vertex);
+        Shader fragment(version, Shader::Type::Fragment);
+
+        vertex.addSource(vss);
+        fragment.addSource(fss);
+
+        CORRADE_INTERNAL_ASSERT_OUTPUT(Shader::compile({vertex, fragment}));
+
+        attachShaders({vertex, fragment});
+
+        CORRADE_INTERNAL_ASSERT_OUTPUT(link());
+
+        bindAttributeLocation(Shaders::Generic3D::Position::Location, "position");
+        bindAttributeLocation(Shaders::Generic3D::TextureCoordinates::Location, "texCoord");
+
+        intensityUniform = uniformLocation("intensity");
+        dimensionsUniform = uniformLocation("dimensions");
+        textureUniform = uniformLocation("textureUnit");
+
+        setUniform(dimensionsUniform, Vector2(800, 600));
+        setUniform(textureUniform, 0);
+    }
+};
+
 class BarShader :
     public AbstractShaderProgram
 {
