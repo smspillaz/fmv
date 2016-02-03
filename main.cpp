@@ -57,9 +57,6 @@
 #include <Magnum/PixelStorage.h>
 #include <Magnum/TextureFormat.h>
 
-#include </home/smspillaz/Source/magnum/src/Magnum/Shaders/Implementation/CreateCompatibilityShader.h>
-
-
 namespace Magnum { namespace Examples {
 
 typedef SceneGraph::Scene<SceneGraph::MatrixTransformation3D> Scene3D;
