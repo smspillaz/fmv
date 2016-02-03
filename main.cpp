@@ -328,6 +328,95 @@ public:
     }
 };
 
+class PostprocessingLayer
+{
+public:
+    Mesh mesh;
+    Buffer vertexBuffer;
+    Framebuffer captureBuffer;
+    Texture2D colorAttachment, depthAttachment;
+
+public:
+
+    PostprocessingLayer() :
+        mesh(MeshPrimitive::TriangleStrip),
+        captureBuffer(defaultFramebuffer.viewport())
+    {
+        Trade::MeshData3D rect(MeshPrimitive::TriangleStrip, {{}}, {{
+                                   { -1.0f, -1.0f, 0.0f },
+                                   { -1.0f, 1.0f, 0.0f },
+                                   { 1.0f, -1.0f, 0.0f },
+                                   { 1.0f, 1.0f, 0.0f }
+                               }}, {{}}, {{
+                                   { 0.0f, 0.0f },
+                                   { 0.0f, 1.0f },
+                                   { 1.0f, 0.0f },
+                                   { 1.0f, 1.0f }
+                               }});
+        vertexBuffer.setData(MeshTools::interleave(rect.positions(0),
+                                                   rect.textureCoords2D(0)),
+                             BufferUsage::StaticDraw);
+
+        mesh.setCount(rect.positions(0).size())
+            .addVertexBuffer(vertexBuffer,
+                             0,
+                             Shaders::Generic3D::Position{},
+                             Shaders::Generic3D::TextureCoordinates{});
+
+        colorAttachment.setMinificationFilter(Sampler::Filter::Nearest)
+                       .setMagnificationFilter(Sampler::Filter::Nearest)
+                       .setWrapping(Sampler::Wrapping::ClampToEdge)
+                       .setStorage(1, TextureFormat::RGBA16F, defaultFramebuffer.viewport().size());
+
+        depthAttachment.setMinificationFilter(Sampler::Filter::Nearest)
+                       .setMagnificationFilter(Sampler::Filter::Nearest)
+                       .setWrapping(Sampler::Wrapping::ClampToEdge)
+                       .setStorage(1, TextureFormat::Depth24Stencil8, defaultFramebuffer.viewport().size());
+
+        captureBuffer.attachTexture(Framebuffer::BufferAttachment::Depth,
+                                    depthAttachment,
+                                    0)
+                     .attachTexture(Framebuffer::ColorAttachment(0),
+                                    colorAttachment,
+                                    0);
+    }
+
+    template<typename Renderer> Texture2D &
+    capture(Renderer &&func) {
+        class GuarunteedFramebufferBind
+        {
+        private:
+            Framebuffer &fb;
+        public:
+            GuarunteedFramebufferBind(Framebuffer &fb) :
+                fb(fb)
+            {
+                fb.bind();
+            }
+
+            ~GuarunteedFramebufferBind()
+            {
+                defaultFramebuffer.bind();
+            }
+
+            GuarunteedFramebufferBind(GuarunteedFramebufferBind const &) = delete;
+            GuarunteedFramebufferBind(GuarunteedFramebufferBind &&) = delete;
+            GuarunteedFramebufferBind & operator=(GuarunteedFramebufferBind const &) = delete;
+            GuarunteedFramebufferBind & operator=(GuarunteedFramebufferBind &&) = delete;
+        };
+
+        GuarunteedFramebufferBind bind(captureBuffer);
+        captureBuffer.clear(FramebufferClear::Color | FramebufferClear::Depth);
+        func();
+
+        return colorAttachment;
+    }
+
+    void draw(AbstractShaderProgram &shader) {
+        mesh.draw(shader);
+    }
+};
+
 class Bar:
     public Object3D,
     public SceneGraph::Drawable3D
@@ -420,8 +509,8 @@ class Floor: public Platform::Application {
 
         LV::InputPtr visualizerInput;
 
-        Framebuffer barsFramebuffer;
-        Texture2D barsColorTexture, barsDepthTexture;
+        PostprocessingLayer postprocessing;
+        ZoomBlurShader zoomBlur;
 };
 
 Floor::Floor(const Arguments& arguments):
@@ -429,8 +518,7 @@ Floor::Floor(const Arguments& arguments):
     cameraObject(&scene),
     camera(cameraObject),
     intensity(0.0f),
-    visualizerInput(LV::Input::load("mplayer")),
-    barsFramebuffer(defaultFramebuffer.viewport())
+    visualizerInput(LV::Input::load("mplayer"))
 {
     visualizerInput->realize();
     Renderer::enable(Renderer::Feature::DepthTest);
@@ -506,23 +594,6 @@ Floor::Floor(const Arguments& arguments):
     camera.setProjectionMatrix(Matrix4::perspectiveProjection(20.0_degf, 1.0f, 0.01f, 50.0f))
           .setViewport(defaultFramebuffer.viewport().size());
 
-    barsColorTexture.setMinificationFilter(Sampler::Filter::Nearest)
-                    .setMagnificationFilter(Sampler::Filter::Nearest)
-                    .setWrapping(Sampler::Wrapping::ClampToEdge)
-                    .setStorage(1, TextureFormat::RGBA16F, defaultFramebuffer.viewport().size());
-
-    barsDepthTexture.setMinificationFilter(Sampler::Filter::Nearest)
-                    .setMagnificationFilter(Sampler::Filter::Nearest)
-                    .setWrapping(Sampler::Wrapping::ClampToEdge)
-                    .setStorage(1, TextureFormat::Depth24Stencil8, defaultFramebuffer.viewport().size());
-
-    barsFramebuffer.attachTexture(Framebuffer::BufferAttachment::Depth,
-                                  barsDepthTexture,
-                                  0)
-                   .attachTexture(Framebuffer::ColorAttachment(0),
-                                  barsColorTexture,
-                                  0);
-
     setSwapInterval(1);
     setMinimalLoopPeriod(16);
 }
@@ -545,14 +616,19 @@ constexpr static const std::array<int, 10> SampleRanges = {
 };
 
 void Floor::drawEvent() {
-    barsFramebuffer.bind();
-    barsFramebuffer.clear(FramebufferClear::Color | FramebufferClear::Depth);
+    Renderer::setClearColor(Color4(0.0f, 0.0f, 0.0f, 1.0f));
+    defaultFramebuffer.clear(FramebufferClear::Depth | FramebufferClear::Color);
 
-    camera.draw(drawables);
+    auto &texture = postprocessing.capture([this]() {
+        camera.draw(drawables);
+    });
 
-    defaultFramebuffer.bind();
+    zoomBlur.setTexture(texture)
+            .setIntensity(0.1f);
 
-    Framebuffer::blit(barsFramebuffer, defaultFramebuffer, defaultFramebuffer.viewport(), FramebufferBlit::Color);
+    Renderer::disable(Renderer::Feature::DepthTest);
+    postprocessing.draw(zoomBlur);
+    Renderer::enable(Renderer::Feature::DepthTest);
 
     swapBuffers();
     redraw();
