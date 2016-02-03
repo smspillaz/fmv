@@ -48,8 +48,14 @@
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Drawable.hpp>
 #include <Magnum/SceneGraph/Camera3D.hpp>
+#include <Magnum/Framebuffer.h>
 #include <Magnum/Timeline.h>
 #include "Magnum/Shaders/Generic.h"
+#include "Magnum/Texture.h"
+#include <Magnum/Image.h>
+#include <Magnum/PixelFormat.h>
+#include <Magnum/PixelStorage.h>
+#include <Magnum/TextureFormat.h>
 
 #include </home/smspillaz/Source/magnum/src/Magnum/Shaders/Implementation/CreateCompatibilityShader.h>
 
@@ -340,6 +346,9 @@ class Floor: public Platform::Application {
         float intensity;
 
         LV::InputPtr visualizerInput;
+
+        Framebuffer barsFramebuffer;
+        Texture2D barsColorTexture, barsDepthTexture;
 };
 
 Floor::Floor(const Arguments& arguments):
@@ -347,13 +356,15 @@ Floor::Floor(const Arguments& arguments):
     cameraObject(&scene),
     camera(cameraObject),
     intensity(0.0f),
-    visualizerInput(LV::Input::load("mplayer"))
+    visualizerInput(LV::Input::load("mplayer")),
+    barsFramebuffer(defaultFramebuffer.viewport())
 {
     visualizerInput->realize();
     Renderer::enable(Renderer::Feature::DepthTest);
     Renderer::enable(Renderer::Feature::Blending);
     Renderer::disable(Renderer::Feature::FaceCulling);
     Renderer::setBlendFunction(Renderer::BlendFunction::One, Renderer::BlendFunction::OneMinusSourceAlpha);
+    Renderer::setClearColor(Color4(0.0, 0.0, 0.0, 1.0));
 
     Trade::MeshData3D cube = barPrimitive(Vector3(1.0f, 1.0f, 1.0f));
 
@@ -422,6 +433,23 @@ Floor::Floor(const Arguments& arguments):
     camera.setProjectionMatrix(Matrix4::perspectiveProjection(20.0_degf, 1.0f, 0.01f, 50.0f))
           .setViewport(defaultFramebuffer.viewport().size());
 
+    barsColorTexture.setMinificationFilter(Sampler::Filter::Nearest)
+                    .setMagnificationFilter(Sampler::Filter::Nearest)
+                    .setWrapping(Sampler::Wrapping::ClampToEdge)
+                    .setStorage(1, TextureFormat::RGBA16F, defaultFramebuffer.viewport().size());
+
+    barsDepthTexture.setMinificationFilter(Sampler::Filter::Nearest)
+                    .setMagnificationFilter(Sampler::Filter::Nearest)
+                    .setWrapping(Sampler::Wrapping::ClampToEdge)
+                    .setStorage(1, TextureFormat::Depth24Stencil8, defaultFramebuffer.viewport().size());
+
+    barsFramebuffer.attachTexture(Framebuffer::BufferAttachment::Depth,
+                                  barsDepthTexture,
+                                  0)
+                   .attachTexture(Framebuffer::ColorAttachment(0),
+                                  barsColorTexture,
+                                  0);
+
     setSwapInterval(1);
     setMinimalLoopPeriod(16);
 }
@@ -444,9 +472,14 @@ constexpr static const std::array<int, 10> SampleRanges = {
 };
 
 void Floor::drawEvent() {
-    defaultFramebuffer.clear(FramebufferClear::Color|FramebufferClear::Depth);
+    barsFramebuffer.bind();
+    barsFramebuffer.clear(FramebufferClear::Color | FramebufferClear::Depth);
 
     camera.draw(drawables);
+
+    defaultFramebuffer.bind();
+
+    Framebuffer::blit(barsFramebuffer, defaultFramebuffer, defaultFramebuffer.viewport(), FramebufferBlit::Color);
 
     swapBuffers();
     redraw();
