@@ -486,6 +486,53 @@ void Bar::draw(Matrix4 const &transformationMatrix,
     mesh.draw(shader);
 }
 
+constexpr static int sample(size_t index) {
+    return static_cast<int>(std::exp((index / 10.0) * log(255.0)));
+}
+
+constexpr static const std::array<int, 10> SampleRanges = {
+    sample(1),
+    sample(2),
+    sample(3),
+    sample(4),
+    sample(5),
+    sample(6),
+    sample(7),
+    sample(8),
+    sample(9),
+    sample(10)
+};
+
+class LVFrequencyProvider
+{
+private:
+
+    LV::InputPtr visualizerInput;
+
+public:
+
+    LVFrequencyProvider(std::string const &inputPlugin) :
+        visualizerInput(LV::Input::load(inputPlugin))
+    {
+        visualizerInput->realize();
+    }
+
+    template <typename Callback> void workWithCurrentFrequencies(Callback &&callback) {
+        visualizerInput->run();
+        auto const &audio = visualizerInput->get_audio();
+        auto pcm_buffer = LV::Buffer::create(512 * sizeof(float));
+        auto freq_buffer = LV::Buffer::create(256 * sizeof(float));
+        const_cast<LV::Audio *>(&audio)->get_sample_mixed_simple(pcm_buffer,
+                                                                 2,
+                                                                 VISUAL_AUDIO_CHANNEL_LEFT,
+                                                                 VISUAL_AUDIO_CHANNEL_RIGHT,
+                                                                 nullptr);
+        LV::Audio::get_spectrum_for_sample(freq_buffer, pcm_buffer, true);
+
+        callback(static_cast<float *>(freq_buffer->get_data()));
+    }
+};
+
 class Floor: public Platform::Application {
     public:
         explicit Floor(const Arguments& arguments);
@@ -507,7 +554,7 @@ class Floor: public Platform::Application {
 
         float intensity;
 
-        LV::InputPtr visualizerInput;
+        LVFrequencyProvider frequencies;
 
         PostprocessingLayer postprocessing;
         ZoomBlurShader zoomBlur;
@@ -518,9 +565,8 @@ Floor::Floor(const Arguments& arguments):
     cameraObject(&scene),
     camera(cameraObject),
     intensity(0.0f),
-    visualizerInput(LV::Input::load("mplayer"))
+    frequencies("mplayer")
 {
-    visualizerInput->realize();
     Renderer::enable(Renderer::Feature::DepthTest);
     Renderer::enable(Renderer::Feature::Blending);
     Renderer::disable(Renderer::Feature::FaceCulling);
@@ -598,24 +644,41 @@ Floor::Floor(const Arguments& arguments):
     setMinimalLoopPeriod(16);
 }
 
-constexpr static int sample(size_t index) {
-    return static_cast<int>(std::exp((index / 10.0) * log(255.0)));
-}
-
-constexpr static const std::array<int, 10> SampleRanges = {
-    sample(1),
-    sample(2),
-    sample(3),
-    sample(4),
-    sample(5),
-    sample(6),
-    sample(7),
-    sample(8),
-    sample(9),
-    sample(10)
-};
-
 void Floor::drawEvent() {
+    frequencies.workWithCurrentFrequencies([this](float *frequenciesData) {
+        float currentIntensity = 0.0f;
+
+        /* Prepare height-map - first row is all random, the next rows follow on
+         * from the previous height */
+        for (size_t i = 0; i < 10; ++i) {
+            /* Go through the sample ranges until we reach the frequency with the
+             * highest amplitude in the current sample range */
+            float highestAmplitudeInRange = 0.0f;
+            const int sampleRangeStart = SampleRanges[i];
+            const int sampleRangeEnd = SampleRanges[i + 1];
+
+            for (int currentSampleFrequency = sampleRangeStart;
+                 currentSampleFrequency <= sampleRangeEnd;
+                 currentSampleFrequency++) {
+                if (frequenciesData[currentSampleFrequency] > highestAmplitudeInRange) {
+                    highestAmplitudeInRange = frequenciesData[currentSampleFrequency];
+                }
+            }
+
+            heights[i] = heights[i] * 0.6f + (highestAmplitudeInRange * 0.4f) + 0.05f;
+
+            currentIntensity += heights[i] / 10.0f;
+        }
+
+        intensity = intensity * 0.7f + currentIntensity * 0.3f;
+
+        for (size_t i = 0; i < 10; ++i) {
+            for (size_t j = 1; j < 50; ++j) {
+                heights[j * 10 + i] = (heights[j * 10 + i] / 2.0f) + (heights[(j - 1) * 10 + i] / 2.0f);
+            }
+        }
+    });
+
     Renderer::setClearColor(Color4(0.0f, 0.0f, 0.0f, 1.0f));
     defaultFramebuffer.clear(FramebufferClear::Depth | FramebufferClear::Color);
 
@@ -624,7 +687,7 @@ void Floor::drawEvent() {
     });
 
     zoomBlur.setTexture(texture)
-            .setIntensity(0.1f);
+            .setIntensity(intensity / 10.0f);
 
     Renderer::disable(Renderer::Feature::DepthTest);
     postprocessing.draw(zoomBlur);
@@ -632,50 +695,6 @@ void Floor::drawEvent() {
 
     swapBuffers();
     redraw();
-
-    visualizerInput->run();
-    auto const &audio = visualizerInput->get_audio();
-    auto pcm_buffer = LV::Buffer::create(512 * sizeof(float));
-    auto freq_buffer = LV::Buffer::create(256 * sizeof(float));
-    const_cast<LV::Audio *>(&audio)->get_sample_mixed_simple(pcm_buffer,
-                                                             2,
-                                                             VISUAL_AUDIO_CHANNEL_LEFT,
-                                                             VISUAL_AUDIO_CHANNEL_RIGHT,
-                                                             nullptr);
-    LV::Audio::get_spectrum_for_sample(freq_buffer, pcm_buffer, true);
-
-    float *frequenciesData = static_cast<float *>(freq_buffer->get_data());
-    float currentIntensity = 0.0f;
-
-    /* Prepare height-map - first row is all random, the next rows follow on
-     * from the previous height */
-    for (size_t i = 0; i < 10; ++i) {
-        /* Go through the sample ranges until we reach the frequency with the
-         * highest amplitude in the current sample range */
-        float highestAmplitudeInRange = 0.0f;
-        const int sampleRangeStart = SampleRanges[i];
-        const int sampleRangeEnd = SampleRanges[i + 1];
-
-        for (int currentSampleFrequency = sampleRangeStart;
-             currentSampleFrequency <= sampleRangeEnd;
-             currentSampleFrequency++) {
-            if (frequenciesData[currentSampleFrequency] > highestAmplitudeInRange) {
-                highestAmplitudeInRange = frequenciesData[currentSampleFrequency];
-            }
-        }
-
-        heights[i] = heights[i] * 0.6f + (highestAmplitudeInRange * 0.4f) + 0.05f;
-
-        currentIntensity += heights[i] / 10.0f;
-    }
-
-    intensity = intensity * 0.7f + currentIntensity * 0.3f;
-
-    for (size_t i = 0; i < 10; ++i) {
-        for (size_t j = 1; j < 50; ++j) {
-            heights[j * 10 + i] = (heights[j * 10 + i] / 2.0f) + (heights[(j - 1) * 10 + i] / 2.0f);
-        }
-    }
 }
 
 }}
