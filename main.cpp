@@ -532,9 +532,9 @@ public:
     }
 };
 
-class Floor: public Platform::Application {
+class View: public Platform::Application {
     public:
-        explicit Floor(const Arguments& arguments);
+        explicit View(const Arguments& arguments);
 
     private:
         void drawEvent() override;
@@ -559,7 +559,7 @@ class Floor: public Platform::Application {
         ZoomBlurShader zoomBlur;
 };
 
-Floor::Floor(const Arguments& arguments):
+View::View(const Arguments& arguments):
     Platform::Application{arguments, Configuration{}.setTitle("FMV")},
     cameraObject(&scene),
     camera(cameraObject),
@@ -643,7 +643,9 @@ Floor::Floor(const Arguments& arguments):
     setMinimalLoopPeriod(16);
 }
 
-void Floor::drawEvent() {
+
+
+void View::drawEvent() {
     frequencies.workWithCurrentFrequencies([this](float *frequenciesData) {
         float currentIntensity = 0.0f;
 
@@ -678,9 +680,6 @@ void Floor::drawEvent() {
         }
     });
 
-    Renderer::setClearColor(Color4(0.0f, 0.0f, 0.0f, 1.0f));
-    defaultFramebuffer.clear(FramebufferClear::Depth | FramebufferClear::Color);
-
     auto &texture = postprocessing.capture([this]() {
         camera.draw(drawables);
     });
@@ -701,7 +700,7 @@ void Floor::drawEvent() {
 int main(int argc, char **argv)
 {
     LV::System::init(argc, argv);
-    FMV::Floor app(FMV::Floor::Arguments(argc, argv));
+    FMV::View app(FMV::View::Arguments(argc, argv));
     int code = app.exec();
     LV::System::destroy();
 
