@@ -21,6 +21,8 @@
 
 #include <array>
 
+#include <functional>
+
 #include <iostream>
 
 #include <libvisual/libvisual.h>
@@ -502,7 +504,20 @@ constexpr static const std::array<int, 10> SampleRanges = {
     sample(10)
 };
 
-class LVFrequencyProvider
+class FrequencyProvider {
+public:
+    typedef std::function<void(float *)> Callback;
+
+    virtual ~FrequencyProvider() = 0;
+    virtual void workWithCurrentFrequencies(Callback const &) = 0;
+};
+
+FrequencyProvider::~FrequencyProvider()
+{
+}
+
+class LVFrequencyProvider :
+    public FrequencyProvider
 {
 private:
 
@@ -516,7 +531,7 @@ public:
         visualizerInput->realize();
     }
 
-    template <typename Callback> void workWithCurrentFrequencies(Callback &&callback) {
+    void workWithCurrentFrequencies(Callback const &callback) override {
         visualizerInput->run();
         auto const &audio = visualizerInput->get_audio();
         auto pcm_buffer = LV::Buffer::create(512 * sizeof(float));
@@ -534,7 +549,8 @@ public:
 
 class View: public Platform::Application {
     public:
-        explicit View(const Arguments& arguments);
+        explicit View(const Arguments& arguments,
+                      FrequencyProvider &provider);
 
     private:
         void drawEvent() override;
@@ -553,18 +569,18 @@ class View: public Platform::Application {
 
         float intensity;
 
-        LVFrequencyProvider frequencies;
+        FrequencyProvider &frequencies;
 
         PostprocessingLayer postprocessing;
         ZoomBlurShader zoomBlur;
 };
 
-View::View(const Arguments& arguments):
+View::View(const Arguments& arguments, FrequencyProvider &provider):
     Platform::Application{arguments, Configuration{}.setTitle("FMV")},
     cameraObject(&scene),
     camera(cameraObject),
     intensity(0.0f),
-    frequencies("mplayer")
+    frequencies(provider)
 {
     Renderer::enable(Renderer::Feature::DepthTest);
     Renderer::enable(Renderer::Feature::Blending);
@@ -700,7 +716,8 @@ void View::drawEvent() {
 int main(int argc, char **argv)
 {
     LV::System::init(argc, argv);
-    FMV::View app(FMV::View::Arguments(argc, argv));
+    FMV::LVFrequencyProvider provider("mplayer");
+    FMV::View app(FMV::View::Arguments(argc, argv), provider);
     int code = app.exec();
     LV::System::destroy();
 
