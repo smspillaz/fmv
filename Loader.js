@@ -48,9 +48,10 @@ function audio() {
         var freqByteData = new Uint8Array(analyser.frequencyBinCount);
         
         analyser.getByteFrequencyData(freqByteData);
+        console.log(freqByteData.length);
         
         for (var i = 0; i < freqByteData.length; ++i) {
-            var magnitude = freqByteData[i];
+            Module._set_frequencies(freqByteData, freqByteData.length);
         }
     }
 
