@@ -18,13 +18,21 @@ include_directories(SYSTEM
                     ${MAGNUM_APPLICATION_INCLUDE_DIRS}
                     ${LIBVISUAL_INCLUDE_DIRS})
 
-add_executable(fmv main.cpp)
-target_link_libraries(fmv
-    ${MAGNUM_APPLICATION_LIBRARIES}
-    ${MAGNUM_LIBRARIES}
-    ${MAGNUM_SHADERS_LIBRARIES}
-    ${MAGNUM_SCENEGRAPH_LIBRARIES}
-    ${MAGNUM_PRIMITIVES_LIBRARIES}
-    ${MAGNUM_MESHTOOLS_LIBRARIES}
-    ${LIBVISUAL_LIBRARIES})
+add_library (fmv-view STATIC view.cpp)
+target_link_libraries(fmv-view
+             ${MAGNUM_APPLICATION_LIBRARIES}
+             ${MAGNUM_LIBRARIES}
+             ${MAGNUM_SHADERS_LIBRARIES}
+             ${MAGNUM_SCENEGRAPH_LIBRARIES}
+             ${MAGNUM_PRIMITIVES_LIBRARIES}
+             ${MAGNUM_MESHTOOLS_LIBRARIES})
 
+add_library (fmv-frequencyprovider STATIC frequencyprovider.cpp)
+
+add_library (fmv-lv STATIC lvfrequencyprovider.cpp)
+target_link_libraries(fmv-lv
+             ${LIBVISUAL_LIBRARIES}
+             fmv-frequencyprovider)
+
+add_executable(fmv main.cpp)
+target_link_libraries(fmv fmv-view fmv-lv)
