@@ -35,10 +35,9 @@ extern "C" {
     }
     
     EMSCRIPTEN_KEEPALIVE
-    void set_frequencies(float *frequencies, size_t length) {
+    void set_frequencies(float *frequencies, float minDB, float range) {
         for (size_t i = 0; i < ModifiableFrequencyProvider::frequencyData.size(); ++i) {
-            printf("Using frequency %f\n", frequencies[i]);
-            ModifiableFrequencyProvider::frequencyData[i] = frequencies[i];
+            ModifiableFrequencyProvider::frequencyData[i] = (frequencies[i] - minDB);
         }
     }
 }
