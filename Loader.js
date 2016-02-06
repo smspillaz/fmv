@@ -45,13 +45,13 @@ function audio() {
     }
 
     function processAudio(e) {
-        var freqByteData = new Uint8Array(analyser.frequencyBinCount);
+        var freqByteData = new Float32Array(analyser.frequencyBinCount);
+        analyser.getFloatFrequencyData(freqByteData);
         
-        analyser.getByteFrequencyData(freqByteData);
-        
-        for (var i = 0; i < freqByteData.length; ++i) {
-            Module._set_frequencies(freqByteData, freqByteData.length);
-        }
+        var buf = Module._malloc(freqByteData.length * freqByteData.BYTES_PER_ELEMENT);
+        Module.HEAPF32.set(freqByteData, buf >> 2);
+        Module._set_frequencies(buf, analyser.minDecibels, analyser.maxDecibels - analyser.minDecibels);
+        Module._free(buf);
     }
 
     function dropEvent(evt) {
