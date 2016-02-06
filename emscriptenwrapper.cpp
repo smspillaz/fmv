@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include <array>
 
 #include <memory>
@@ -36,8 +38,9 @@ extern "C" {
     
     EMSCRIPTEN_KEEPALIVE
     void set_frequencies(float *frequencies, float minDB, float range) {
+        printf("%f\n", range);
         for (size_t i = 0; i < ModifiableFrequencyProvider::frequencyData.size(); ++i) {
-            ModifiableFrequencyProvider::frequencyData[i] = (frequencies[i] - minDB) / (range * 1.3);
+            ModifiableFrequencyProvider::frequencyData[i] = std::log(frequencies[i] - minDB) / 6.908f;
         }
     }
 }
