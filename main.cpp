@@ -29,7 +29,7 @@ int main(int argc, char **argv)
 {
     LV::System::init(argc, argv);
     std::shared_ptr<FMV::FrequencyProvider> provider(FMV::createLVFrequencyProvider("mplayer"));
-    int code = FMV::runViewLoop(argc, argv, *provider);
+    int code = FMV::runViewLoop(argc, argv, {800, 600}, *provider);
     LV::System::destroy();
 
     return code;

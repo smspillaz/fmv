@@ -25,11 +25,6 @@
 
 #include <iostream>
 
-#include <libvisual/libvisual.h>
-#include <libvisual/lv_common.h>
-#include <libvisual/lv_input.h>
-#include <libvisual/lv_buffer.h>
-
 #include <Magnum/AbstractShaderProgram.h>
 #include <Magnum/Buffer.h>
 #include <Magnum/Context.h>
@@ -161,29 +156,33 @@ public:
     explicit ZoomBlurShader() :
         intensityUniform(0)
     {
+        #ifndef MAGNUM_TARGET_GLES
         const Version version = Context::current().supportedVersion({Version::GL320, Version::GL310, Version::GL300, Version::GL210});
+        #else
+        const Version version = Context::current().supportedVersion({Version::GLES300, Version::GLES200});
+        #endif
 
-        const char *vss = "attribute vec4 position;\n" \
-                          "attribute vec2 texCoord;\n" \
-                          "varying vec2 vTexCoord;\n" \
+        const char *vss = "attribute lowp vec4 position;\n" \
+                          "attribute lowp vec2 texCoord;\n" \
+                          "varying lowp vec2 vTexCoord;\n" \
                           "void main() {\n" \
                           "    vTexCoord = texCoord;\n" \
                           "    gl_Position = position;\n" \
                           "}\n";
         const char *fss = "uniform sampler2D textureUnit;\n" \
-                          "uniform float intensity;\n" \
-                          "uniform vec2 dimensions;\n" \
-                          "varying vec2 vTexCoord;\n" \
+                          "uniform lowp float intensity;\n" \
+                          "uniform lowp vec2 dimensions;\n" \
+                          "varying lowp vec2 vTexCoord;\n" \
                           "void main() {\n" \
-                          "    vec2 center = dimensions / 2.0;\n" \
-                          "    vec2 vectorPointingToCenter = vec2(center - vTexCoord * dimensions);\n" \
-                          "    vec4 total = vec4(0, 0, 0, 0);\n"
-                          "    for (float i = 0.0; i < 40.0; i += 1.0) {\n" \
-                          "        float pc = i / 40.0;\n" \
-                          "        vec2 offset = ((pc * vectorPointingToCenter) / dimensions) * intensity;\n" \
-                          "        vec4 sample = texture2D(textureUnit, vTexCoord + offset);\n" \
+                          "    lowp vec2 center = dimensions / 2.0;\n" \
+                          "    lowp vec2 vectorPointingToCenter = vec2(center - vTexCoord * dimensions);\n" \
+                          "    lowp vec4 total = vec4(0, 0, 0, 0);\n"
+                          "    for (lowp float i = 0.0; i < 40.0; i += 1.0) {\n" \
+                          "        lowp float pc = i / 40.0;\n" \
+                          "        lowp vec2 offset = ((pc * vectorPointingToCenter) / dimensions) * intensity;\n" \
+                          "        lowp vec4 sample = texture2D(textureUnit, vTexCoord + offset);\n" \
                           "        sample.rgb *= sample.a;\n" \
-                          "        total += (sample * 4.0 * (pc - pc * pc)) / 40.0f;\n" \
+                          "        total += (sample * 4.0 * (pc - pc * pc)) / 40.0;\n" \
                           "    }\n"
                           "    gl_FragColor = total;\n" \
                           "    gl_FragColor.rgb /= (total.a + 0.0000001);\n"
@@ -208,8 +207,13 @@ public:
         dimensionsUniform = uniformLocation("dimensions");
         textureUniform = uniformLocation("textureUnit");
 
-        setUniform(dimensionsUniform, Vector2(800, 600));
+        resize(defaultFramebuffer.viewport().size());
         setUniform(textureUniform, 0);
+    }
+
+    void resize(Vector2i const &size) {
+        setUniform(dimensionsUniform, Vector2(static_cast<float>(size.x()),
+                                              static_cast<float>(size.y())));
     }
 };
 
@@ -252,59 +256,63 @@ public:
     }
 
     explicit BarShader() {
+        #ifndef MAGNUM_TARGET_GLES
         const Version version = Context::current().supportedVersion({Version::GL320, Version::GL310, Version::GL300, Version::GL210});
+        #else
+        const Version version = Context::current().supportedVersion({Version::GLES300, Version::GLES200});
+        #endif
 
         Shader vert(version, Shader::Type::Vertex);
         Shader frag(version, Shader::Type::Fragment);
 
         const char *fragment_shader_source = \
-                "varying vec4 varyingColor;\n" \
-                "varying vec4 varyingPosition;\n" \
-                "varying vec3 varyingBarycentric;\n" \
+                "varying lowp vec4 varyingColor;\n" \
+                "varying lowp vec4 varyingPosition;\n" \
+                "varying lowp vec3 varyingBarycentric;\n" \
                 "void main() {\n" \
                 "    /* Determine how far away we are from 0.5, 0.5 and multiply varyingColor by that */\n" \
-                "    float distance = varyingPosition.y;\n" \
+                "    lowp float distance = varyingPosition.y;\n" \
                 "    if (any(lessThan(vec3(varyingBarycentric.xz, 1), vec3(0.02)))) {\n" \
                 "        gl_FragColor = varyingColor;\n"
                 "    } else {\n" \
-                "        vec4 mixFactor = varyingColor * mix((1.0 - distance), 1.0, varyingColor.a * 0.2);\n" \
-                "        vec4 highlight = varyingColor * 0.2;\n" \
+                "        lowp vec4 mixFactor = varyingColor * mix((1.0 - distance), 1.0, varyingColor.a * 0.2);\n" \
+                "        lowp vec4 highlight = varyingColor * 0.2;\n" \
                 "        gl_FragColor = mixFactor + highlight;\n" \
                 "    }\n"
                 "}\n";
 
         const char *vertex_shader_source = \
-                "uniform mat4 modelview;\n" \
-                "uniform mat4 projection;\n" \
-                "uniform mat3 normalMatrix;\n" \
-                "uniform vec4 color;\n"\
-                "uniform vec3 lightPosition;\n" \
-                "attribute vec4 position;\n" \
-                "attribute vec3 normal;\n" \
-                "attribute vec3 barycentric;\n"
-                "varying vec4 varyingColor;\n" \
-                "varying vec4 varyingPosition;\n" \
-                "varying vec3 varyingBarycentric;\n" \
+                "uniform lowp mat4 modelview;\n" \
+                "uniform lowp mat4 projection;\n" \
+                "uniform lowp mat3 normalMatrix;\n" \
+                "uniform lowp vec4 color;\n"\
+                "uniform lowp vec3 lightPosition;\n" \
+                "attribute lowp vec4 position;\n" \
+                "attribute lowp vec3 normal;\n" \
+                "attribute lowp vec3 barycentric;\n"
+                "varying lowp vec4 varyingColor;\n" \
+                "varying lowp vec4 varyingPosition;\n" \
+                "varying lowp vec3 varyingBarycentric;\n" \
                 "void main() {\n" \
                 "    /* Transform normal to eye co-ordinates */\n" \
-                "    vec3 eyeNormal = normalMatrix * normal;\n" \
+                "    lowp vec3 eyeNormal = normalMatrix * normal;\n" \
                 "    /* Transform position to eye co-ordinates, but don't project it yet */\n" \
-                "    vec4 eyePosition = modelview * position;\n" \
-                "    vec3 eyePositionHomogenized = eyePosition.xyz / eyePosition.w;\n" \
+                "    lowp vec4 eyePosition = modelview * position;\n" \
+                "    lowp vec3 eyePositionHomogenized = eyePosition.xyz / eyePosition.w;\n" \
                 "    /* Get difference from light position to eye position - this gives us the direction the light is facing */\n" \
-                "    vec3 lightDirection = normalize(lightPosition - eyePositionHomogenized);\n" \
+                "    lowp vec3 lightDirection = normalize(lightPosition - eyePositionHomogenized);\n" \
                 "    /* Now get the intensity of the light - this will just be the dot product of the eye normal and light direction *\n" \
                 "     * If it is facing in the same direction, the light will be at its most intense. We can't have negative lighting so *\n" \
                 "     * cap it at a minimum of zero */\n" \
-                "    float intensity = max(0.0, dot(eyeNormal, lightDirection));\n" \
+                "    lowp float intensity = max(0.0, dot(eyeNormal, lightDirection));\n" \
                 "    /* Calculate specular component, by getting the reflection direction between *\n" \
                 "     * the surface and the viewing angle and computing the dot product between the *\n" \
                 "     * two. The dot product represents the cosine of the angle between the two, so the *\n" \
                 "     * smaller it is, the more shiny this surface will be */\n" \
-                "    vec3 reflection = reflect(-lightDirection, eyeNormal);\n" \
-                "    float reflectionAngle = max(0.0, dot(reflection, eyeNormal));\n" \
+                "    lowp vec3 reflection = reflect(-lightDirection, eyeNormal);\n" \
+                "    lowp float reflectionAngle = max(0.0, dot(reflection, eyeNormal));\n" \
                 "    /* Calculate the diffuse lighting and add ambient and specular components */\n" \
-                "    varyingColor.xyz = (color.xyz * intensity * 3 + color.xyz * 0.2 + pow(reflectionAngle, 128) * vec3(1.0f)) * color.a;\n" \
+                "    varyingColor.xyz = (color.xyz * intensity * 3.0 + color.xyz * 0.2 + pow(reflectionAngle, 128.0) * vec3(1.0)) * color.a;\n" \
                 "    varyingColor.a = color.a;\n" \
                 "    varyingPosition = position;\n" \
                 "    varyingBarycentric = barycentric;\n" \
@@ -369,13 +377,13 @@ public:
 
         colorAttachment.setMinificationFilter(Sampler::Filter::Nearest)
                        .setMagnificationFilter(Sampler::Filter::Nearest)
-                       .setWrapping(Sampler::Wrapping::ClampToEdge)
-                       .setStorage(1, TextureFormat::RGBA16F, defaultFramebuffer.viewport().size());
+                       .setWrapping(Sampler::Wrapping::ClampToEdge);
 
         depthAttachment.setMinificationFilter(Sampler::Filter::Nearest)
                        .setMagnificationFilter(Sampler::Filter::Nearest)
-                       .setWrapping(Sampler::Wrapping::ClampToEdge)
-                       .setStorage(1, TextureFormat::Depth24Stencil8, defaultFramebuffer.viewport().size());
+                       .setWrapping(Sampler::Wrapping::ClampToEdge);
+
+        resize(defaultFramebuffer.viewport().size());
 
         captureBuffer.attachTexture(Framebuffer::BufferAttachment::Depth,
                                     depthAttachment,
@@ -383,6 +391,12 @@ public:
                      .attachTexture(Framebuffer::ColorAttachment(0),
                                     colorAttachment,
                                     0);
+    }
+
+    void resize(Vector2i const &size) {
+        captureBuffer.setViewport(Range2Di(Vector2i(0, 0), size));
+        colorAttachment.setStorage(1, TextureFormat::RGBA, size);
+        depthAttachment.setStorage(1, TextureFormat::DepthComponent, size);
     }
 
     template<typename Renderer> Texture2D &
@@ -490,11 +504,11 @@ void Bar::draw(Matrix4 const &transformationMatrix,
     mesh.draw(shader);
 }
 
-constexpr static int sample(size_t index) {
+static int sample(size_t index) {
     return static_cast<int>(std::exp((index / 10.0) * log(255.0)));
 }
 
-constexpr static const std::array<int, 10> SampleRanges = {
+static const std::array<int, 10> SampleRanges = {
     sample(1),
     sample(2),
     sample(3),
@@ -509,11 +523,13 @@ constexpr static const std::array<int, 10> SampleRanges = {
 
 class View: public Platform::Application {
     public:
-        explicit View(const Arguments& arguments,
+        explicit View(const Arguments &arguments,
+                      const Vector2i &size,
                       FrequencyProvider &provider);
 
     private:
         void drawEvent() override;
+        void viewportEvent(Vector2i const &size) override;
 
         Scene3D scene;
         SceneGraph::DrawableGroup3D drawables;
@@ -535,8 +551,22 @@ class View: public Platform::Application {
         ZoomBlurShader zoomBlur;
 };
 
-View::View(const Arguments& arguments, FrequencyProvider &provider):
-    Platform::Application{arguments, Configuration{}.setTitle("FMV")},
+const auto WindowFlags = Platform::Sdl2Application::Configuration::WindowFlag::Resizable;
+
+#ifndef CORRADE_TARGET_EMSCRIPTEN
+const auto ContextFlags = Platform::Sdl2Application::Configuration::Flag::Debug;
+#endif
+
+View::View(const Arguments& arguments,
+           Vector2i const &size,
+           FrequencyProvider &provider):
+    Platform::Application{arguments,
+                          Configuration{}.setTitle("FMV")
+                                         .setSize(size)
+#ifndef CORRADE_TARGET_EMSCRIPTEN
+                                         .setFlags(ContextFlags)
+#endif
+                                         .setWindowFlags(WindowFlags)},
     cameraObject(&scene),
     camera(cameraObject),
     intensity(0.0f),
@@ -588,6 +618,7 @@ View::View(const Arguments& arguments, FrequencyProvider &provider):
     Mesh::IndexType indexType;
     UnsignedInt indexStart, indexEnd;
     std::tie(indexData, indexType, indexStart, indexEnd) = MeshTools::compressIndices(cube.indices());
+    _indexBuffer.setTargetHint(Buffer::TargetHint::ElementArray);
     _indexBuffer.setData(indexData, BufferUsage::StaticDraw);
 
     _mesh.setPrimitive(cube.primitive())
@@ -615,8 +646,10 @@ View::View(const Arguments& arguments, FrequencyProvider &provider):
     camera.setProjectionMatrix(Matrix4::perspectiveProjection(20.0_degf, 1.0f, 0.01f, 50.0f))
           .setViewport(defaultFramebuffer.viewport().size());
 
+#ifndef CORRADE_TARGET_EMSCRIPTEN
     setSwapInterval(1);
     setMinimalLoopPeriod(16);
+#endif
 }
 
 
@@ -671,8 +704,17 @@ void View::drawEvent() {
     redraw();
 }
 
-int runViewLoop(int argc, char **argv, FrequencyProvider &provider) {
-    View view(View::Arguments(argc, argv), provider);
+void View::viewportEvent(Vector2i const &size) {
+    camera.setViewport(size);
+    defaultFramebuffer.setViewport(Range2Di(Vector2i(0, 0), size));
+    postprocessing.resize(size);
+    zoomBlur.resize(size);
+
+    Debug() << "Viewport event" << size;
+}
+
+int runViewLoop(int argc, char **argv, Vector2i const &size, FrequencyProvider &provider) {
+    View view(View::Arguments(argc, argv), size, provider);
     return view.exec();
 }
 

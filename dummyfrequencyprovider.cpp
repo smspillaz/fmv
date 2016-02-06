@@ -1,3 +1,7 @@
+#include <stdlib.h>
+
+#include <cmath>
+
 #include <array>
 
 #include <functional>
@@ -22,7 +26,10 @@ public:
 void
 DummyFrequencyProvider::workWithCurrentFrequencies(Callback const &cb) {
     std::array<float, 255> frequencies;
-    frequencies.fill(0.5);
+
+    for (size_t i = 0; i < frequencies.size(); ++i) {
+        frequencies[i] = (rand() % 1000) / 3000.0f;
+    }
 
     cb(frequencies.data());
 }

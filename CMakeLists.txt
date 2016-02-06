@@ -29,6 +29,7 @@ target_link_libraries(fmv-view
 
 add_library (fmv-frequencyprovider STATIC frequencyprovider.cpp)
 
+if (NOT CORRADE_TARGET_EMSCRIPTEN)
 add_library (fmv-lv STATIC lvfrequencyprovider.cpp)
 target_link_libraries(fmv-lv
              ${LIBVISUAL_LIBRARIES}
@@ -37,5 +38,9 @@ target_link_libraries(fmv-lv
 add_executable(fmv main.cpp)
 target_link_libraries(fmv fmv-view fmv-lv)
 
-add_executable(fmv-dummy main-dummy.cpp dummyfrequencyprovider.cpp)
-target_link_libraries(fmv-dummy fmv-view fmv-lv)
+else ()
+
+add_executable (fmv-emscripten-wrapper emscriptenwrapper.cpp dummyfrequencyprovider.cpp)
+target_link_libraries(fmv-emscripten-wrapper fmv-view fmv-frequencyprovider)
+
+endif ()
