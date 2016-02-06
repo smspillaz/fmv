@@ -40,7 +40,7 @@ extern "C" {
     void set_frequencies(float *frequencies, float minDB, float range) {
         printf("%f  - %f\n", range, minDB);
         for (size_t i = 0; i < ModifiableFrequencyProvider::frequencyData.size(); ++i) {
-            ModifiableFrequencyProvider::frequencyData[i] = std::log(frequencies[i] - minDB) / 6.908f;
+            ModifiableFrequencyProvider::frequencyData[i] = (frequencies[i] - minDB) / (range * 2);
         }
     }
 }
