@@ -37,7 +37,7 @@ extern "C" {
     EMSCRIPTEN_KEEPALIVE
     void set_frequencies(float *frequencies, float minDB, float range) {
         for (size_t i = 0; i < ModifiableFrequencyProvider::frequencyData.size(); ++i) {
-            ModifiableFrequencyProvider::frequencyData[i] = (frequencies[i] - minDB) / range;
+            ModifiableFrequencyProvider::frequencyData[i] = (frequencies[i] - minDB) / (range * 3);
         }
     }
 }
