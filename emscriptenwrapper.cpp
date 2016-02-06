@@ -8,6 +8,7 @@
 #include <emscripten.h>
 
 #include <SDL/SDL.h>
+#include <cstdio>
 
 namespace {
     class ModifiableFrequencyProvider :
@@ -21,6 +22,8 @@ namespace {
                 cb(ModifiableFrequencyProvider::frequencyData.data());
             }
     };
+
+    std::array<float, 255> ModifiableFrequencyProvider::frequencyData;
 }
 
 extern "C" {
@@ -33,7 +36,8 @@ extern "C" {
     
     EMSCRIPTEN_KEEPALIVE
     void set_frequencies(float *frequencies, size_t length) {
-        for (size_t i = 0; i < length; ++i) {
+        for (size_t i = 0; i < ModifiableFrequencyProvider::frequencyData.size(); ++i) {
+            printf("Using frequency %f\n", frequencies[i]);
             ModifiableFrequencyProvider::frequencyData[i] = frequencies[i];
         }
     }
