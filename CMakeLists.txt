@@ -36,3 +36,6 @@ target_link_libraries(fmv-lv
 
 add_executable(fmv main.cpp)
 target_link_libraries(fmv fmv-view fmv-lv)
+
+add_executable(fmv-dummy main-dummy.cpp dummyfrequencyprovider.cpp)
+target_link_libraries(fmv-dummy fmv-view fmv-lv)
