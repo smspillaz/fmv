@@ -4,6 +4,7 @@ function audio() {
     var processor;
     var analyser;
     var xhr;
+    var disconnectTimeout = 0;
 
     function initAudio(data) {
         source = context.createBufferSource();
@@ -34,7 +35,8 @@ function audio() {
         processor.connect(context.destination);
 
         source.noteOn(0);
-        setTimeout(disconnect, source.buffer.duration * 1000 +1000);
+        disconnectTimeout = setTimeout(disconnect,
+                                       source.buffer.duration * 1000 +1000);
     }
 
     function disconnect() {
@@ -42,6 +44,8 @@ function audio() {
         source.disconnect(0);
         processor.disconnect(0);
         analyser.disconnect(0);
+
+        disconnectTimeout = 0;
     }
 
     function processAudio(e) {
@@ -57,7 +61,12 @@ function audio() {
     function dropEvent(evt) {
         evt.stopPropagation();
         evt.preventDefault();
-        
+
+        if (disconnectTimeout) {
+            clearTimeout(disconnectTimeout);
+            disconnectTimeout = 0;
+        }
+
         var droppedFiles = evt.dataTransfer.files;
         
         var reader = new FileReader();
@@ -66,6 +75,9 @@ function audio() {
             var data = fileEvent.target.result;
             initAudio(data);
         };
+
+        var infoBox = document.getElementById("info-box");
+        infoBox.parentNode.removeChild(infoBox);
         
         reader.readAsArrayBuffer(droppedFiles[0]);
     }

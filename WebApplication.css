@@ -13,7 +13,7 @@ body {
     color: white;
     position: absolute;
     bottom: 10px;
-    left: auto;
+    left: 2em;
     width: 10em;
     background-color: #000000;
 }
