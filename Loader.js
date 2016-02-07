@@ -1,5 +1,5 @@
 function audio() {
-    var context = new (window.AudioContext || window.webkitAudioContext)();
+    var context = new (window.webkitAudioContext || window.AudioContext)();
     var source;
     var processor;
     var analyser;
