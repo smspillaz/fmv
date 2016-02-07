@@ -22,7 +22,7 @@ function audio() {
     }
 
     function createAudio() {
-        processor = context.createJavaScriptNode(512 /*bufferSize*/, 1 /*num inputs*/, 1 /*num outputs*/);
+        processor = (context.createJavaScriptNode || context.createScriptProcessor)(512 /*bufferSize*/, 1 /*num inputs*/, 1 /*num outputs*/);
         processor.onaudioprocess = processAudio;
 
         analyser = context.createAnalyser();
