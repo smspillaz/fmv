@@ -16,7 +16,7 @@ include(FindPkgConfig)
 
 pkg_check_modules(LIBVISUAL REQUIRED libvisual-0.5)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CORRADE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CORRADE_CXX_FLAGS} -std=c++11")
 include_directories(SYSTEM
                     ${MAGNUM_INCLUDE_DIRS}
                     ${MAGNUM_APPLICATION_INCLUDE_DIRS}
