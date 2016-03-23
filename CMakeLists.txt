@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 2.8.9)
 project(MagnumTriangleExample)
 
+set (CMAKE_MODULE_PATH
+     "${CMAKE_CURRENT_LIST_DIR}/cmake"
+     ${CMAKE_MODULE_PATH})
+
 find_package(Magnum REQUIRED
     Shaders
     Sdl2Application
