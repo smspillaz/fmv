@@ -1,9 +1,21 @@
 cmake_minimum_required(VERSION 2.8.9)
 project(MagnumTriangleExample)
 
+if (EXISTS "${CMAKE_CURRENT_LIST_DIR}/conanbuildinfo.cmake")
+
+    include ("${CMAKE_CURRENT_LIST_DIR}/conanbuildinfo.cmake")
+    conan_basic_setup()
+
+endif ()
+
+set (CMAKE_PREFIX_PATH
+     "${CONAN_MAGNUM_ROOT};${CMAKE_PREFIX_PATH}")
 set (CMAKE_MODULE_PATH
      "${CMAKE_CURRENT_LIST_DIR}/cmake"
+     "${CONAN_MAGNUM_ROOT}/share/cmake/Magnum"
      ${CMAKE_MODULE_PATH})
+
+find_package (EGL)
 
 find_package(Magnum REQUIRED
     Shaders
