@@ -37,6 +37,7 @@
 #include <Magnum/MeshTools/Transform.h>
 #include <Magnum/Platform/Sdl2Application.h>
 #include <Magnum/Primitives/Cube.h>
+#include <Magnum/Primitives/Icosphere.h>
 #include <Magnum/Shaders/Phong.h>
 #include <Magnum/Shaders/Flat.h>
 #include <Magnum/Trade/MeshData3D.h>
@@ -435,6 +436,32 @@ public:
     }
 };
 
+class Star:
+    public Object3D,
+    public SceneGraph::Drawable3D
+{
+public:
+    Mesh &mesh;
+    Shaders::Phong &shader;
+    Color3 color;
+    float distance;
+    float angle;
+    float &intensity;
+    Timeline timeline;
+
+    Star(Object3D &parent,
+         Mesh &mesh,
+         Shaders::Phong &shader,
+         Color3 const &color,
+         SceneGraph::DrawableGroup3D &group,
+         float angle,
+         float distance,
+         float &intensity);
+
+    void draw(Matrix4 const &transformationMatrix,
+              SceneGraph::Camera3D &camera) override;
+};
+
 class Bar:
     public Object3D,
     public SceneGraph::Drawable3D
@@ -493,15 +520,71 @@ void Bar::draw(Matrix4 const &transformationMatrix,
                       transformationMatrix *
                       Matrix4::scaling(Vector3(1.0f, heightMap[heightMapIndex], 1.0f)));
 
-    shader.setModelviewMatrix(transform)
-          .setProjectionMatrix(camera.projectionMatrix())
-          .setNormalMatrix(transform.rotationScaling())
-          .setLightPosition({0.5f, 0.5f, 1.0f})
-          .setColor(Color4(color, heightMap[heightMapIndex] * (1.0f - (heightMapIndex / 10) / 50.0f)));
+    float alpha = heightMap[heightMapIndex] * (1.0f - (heightMapIndex / 10) / 50.0f);
+
+    if (alpha > 0.3f) {
+        shader.setModelviewMatrix(transform)
+              .setProjectionMatrix(camera.projectionMatrix())
+              .setNormalMatrix(transform.rotationScaling())
+              .setLightPosition({0.5f, 0.5f, 1.0f})
+              .setColor(Color4(color, alpha));
+        mesh.draw(shader);
+    }
 
     timeline.nextFrame();
+}
 
-    mesh.draw(shader);
+Star::Star(Object3D &parent,
+           Mesh &mesh,
+           Shaders::Phong &shader,
+           Color3 const &color,
+           SceneGraph::DrawableGroup3D &group,
+           float angle,
+           float distance,
+           float &intensity):
+    Object3D(&parent),
+    SceneGraph::Drawable3D(*this, &group),
+    mesh(mesh),
+    shader(shader),
+    color(color),
+    distance(-distance),
+    angle(angle),
+    intensity(intensity)
+{
+    timeline.start();
+}
+
+void Star::draw(Matrix4 const &transformationMatrix,
+                SceneGraph::Camera3D &camera)
+{
+    Matrix4 transform(Matrix4::translation(Vector3(-0.5f, -0.5f, -1.4f * 2)) *
+                      Matrix4::rotationX(Deg(10)) *
+                      Matrix4::rotationX(Deg((static_cast<float>(sin(timeline.previousFrameTime() * 0.2f)) + 1.0f) * 5.0f)) *
+                      Matrix4::rotationX(Deg((static_cast<float>(sin(intensity + timeline.previousFrameTime() * 0.2f)) + 1.0f) * 5.0f)) *
+                      Matrix4::translation(Vector3(0.5f, -0.5f, 1.4f * 2)) *
+                      transformationMatrix *
+                      Matrix4::translation(Vector3(std::cos(angle) * 20.0f, std::sin(angle) * 20.0f, distance * 10)));
+
+    distance += timeline.previousFrameDuration() * 5;
+
+    if (distance > 0) {
+        distance = -25.0f;
+    }
+
+    float alpha = std::sin((1.0f - fabsf(distance) / 25.0f) * 3.14f) / 2.0f;
+
+
+    if (alpha > 0.3) {
+        shader.setTransformationMatrix(transform)
+              .setProjectionMatrix(camera.projectionMatrix())
+              .setNormalMatrix(transform.rotationScaling())
+              .setLightPosition({0.5f, 0.5f, 1.0f})
+              .setLightColor(Color4(color, alpha));
+
+        mesh.draw(shader);
+    }
+
+    timeline.nextFrame();
 }
 
 static int sample(size_t index) {
@@ -536,10 +619,11 @@ class View: public Platform::Application {
         Object3D cameraObject;
         SceneGraph::Camera3D camera;
 
-        Buffer _vertexBuffer, _indexBuffer;
-        Mesh _mesh;
+        Buffer _cubeVertexBuffer, _cubeIndexBuffer, _sphereVertexBuffer, _sphereIndexBuffer;
+        Mesh _cubeMesh, _sphereMesh;
 
-        BarShader _shader;
+        BarShader _cubeShader;
+        Shaders::Phong _sphereShader;
 
         std::array<float, 500> heights;
 
@@ -612,26 +696,26 @@ View::View(const Arguments& arguments,
                                    {0.0f, 1.0f, 0.0f}
                                }};
 
-    _vertexBuffer.setData(MeshTools::interleave(cube.positions(0), cube.normals(0), barycentric), BufferUsage::StaticDraw);
+    _cubeVertexBuffer.setData(MeshTools::interleave(cube.positions(0), cube.normals(0), barycentric), BufferUsage::StaticDraw);
 
-    Containers::Array<char> indexData;
+    Containers::Array<char> cubeIndexData;
     Mesh::IndexType indexType;
     UnsignedInt indexStart, indexEnd;
-    std::tie(indexData, indexType, indexStart, indexEnd) = MeshTools::compressIndices(cube.indices());
-    _indexBuffer.setTargetHint(Buffer::TargetHint::ElementArray);
-    _indexBuffer.setData(indexData, BufferUsage::StaticDraw);
+    std::tie(cubeIndexData, indexType, indexStart, indexEnd) = MeshTools::compressIndices(cube.indices());
+    _cubeIndexBuffer.setTargetHint(Buffer::TargetHint::ElementArray);
+    _cubeIndexBuffer.setData(cubeIndexData, BufferUsage::StaticDraw);
 
-    _mesh.setPrimitive(cube.primitive())
+    _cubeMesh.setPrimitive(cube.primitive())
         .setCount(cube.indices().size())
-        .addVertexBuffer(_vertexBuffer, 0, Shaders::Generic<3>::Position{}, Shaders::Generic<3>::Normal{}, BarShader::Barycentric{})
-        .setIndexBuffer(_indexBuffer, 0, indexType, indexStart, indexEnd);
+        .addVertexBuffer(_cubeVertexBuffer, 0, Shaders::Generic<3>::Position{}, Shaders::Generic<3>::Normal{}, BarShader::Barycentric{})
+        .setIndexBuffer(_cubeIndexBuffer, 0, indexType, indexStart, indexEnd);
 
     auto step = 18;
     for (size_t i = 0; i < 50; ++i) {
         for (size_t j = 0; j < 10; ++j) {
             (new Bar(cameraObject,
-                     _mesh,
-                     _shader,
+                     _cubeMesh,
+                     _cubeShader,
                      Color3::fromHSV(Deg(j * step + i * step * 0.1), 1.0f, 1.0f),
                      drawables,
                      heights,
@@ -642,6 +726,31 @@ View::View(const Arguments& arguments,
             heights[j + i * 10] = 0.1;
         }
     }
+
+    Trade::MeshData3D sphere = Magnum::Primitives::Icosphere::solid(2);
+    _sphereVertexBuffer.setData(MeshTools::interleave(sphere.positions(0), sphere.normals(0)), BufferUsage::StaticDraw);
+
+    _sphereMesh.setPrimitive(sphere.primitive())
+            .setCount(sphere.indices().size())
+            .addVertexBuffer(_sphereVertexBuffer, 0, Shaders::Generic<3>::Position{}, Shaders::Generic<3>::Normal{});
+
+    for (size_t i = 0; i < 25; ++i) {
+        /* Create polar vectors to represent the distribution
+         * of a circle */
+        float theta = (2 * Math::Constants<Float>::pi()) * ((1.0f / 25.0f) * i);
+
+        for (size_t j = 0; j < 4; ++j) {
+            (new Star(cameraObject,
+                      _sphereMesh,
+                      _sphereShader,
+                      Color3(1.0f, 1.0f, 1.0f),
+                      drawables,
+                      theta,
+                      (((1.0f + (rand() % 100) / 1000.0f) / 4.0f) * j) * 25,
+                      intensity))->scale(Vector3(0.1, 0.1, 0.1)).translate(Vector3(-0.1f, -0.1f, 0.0f));
+        }
+    }
+
 
     camera.setProjectionMatrix(Matrix4::perspectiveProjection(20.0_degf, 1.0f, 0.01f, 50.0f))
           .setViewport(defaultFramebuffer.viewport().size());
