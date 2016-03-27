@@ -547,8 +547,8 @@ class View: public Platform::Application {
 
         FrequencyProvider &frequencies;
 
-        PostprocessingLayer postprocessing;
-        ZoomBlurShader zoomBlur;
+        //PostprocessingLayer postprocessing;
+        //ZoomBlurShader zoomBlur;
 };
 
 const auto WindowFlags = Platform::Sdl2Application::Configuration::WindowFlag::Resizable;
@@ -689,16 +689,19 @@ void View::drawEvent() {
         }
     });
 
-    auto &texture = postprocessing.capture([this]() {
-        camera.draw(drawables);
-    });
+    defaultFramebuffer.clear(FramebufferClear::Color | FramebufferClear::Depth);
+    camera.draw(drawables);
 
-    zoomBlur.setTexture(texture)
-            .setIntensity(intensity / 10.0f);
+    //auto &texture = postprocessing.capture([this]() {
+    //    camera.draw(drawables);
+    //});
 
-    Renderer::disable(Renderer::Feature::DepthTest);
-    postprocessing.draw(zoomBlur);
-    Renderer::enable(Renderer::Feature::DepthTest);
+    //zoomBlur.setTexture(texture)
+    //        .setIntensity(intensity / 10.0f);
+
+    //Renderer::disable(Renderer::Feature::DepthTest);
+    //postprocessing.draw(zoomBlur);
+    //Renderer::enable(Renderer::Feature::DepthTest);
 
     swapBuffers();
     redraw();
@@ -707,8 +710,8 @@ void View::drawEvent() {
 void View::viewportEvent(Vector2i const &size) {
     camera.setViewport(size);
     defaultFramebuffer.setViewport(Range2Di(Vector2i(0, 0), size));
-    postprocessing.resize(size);
-    zoomBlur.resize(size);
+    //postprocessing.resize(size);
+    //zoomBlur.resize(size);
 
     Debug() << "Viewport event" << size;
 }
