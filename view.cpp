@@ -659,7 +659,7 @@ View::View(const Arguments& arguments,
     Renderer::enable(Renderer::Feature::DepthTest);
     Renderer::enable(Renderer::Feature::Blending);
     Renderer::disable(Renderer::Feature::FaceCulling);
-    Renderer::setBlendFunction(Renderer::BlendFunction::One, Renderer::BlendFunction::OneMinusSourceAlpha);
+    Renderer::setBlendFunction(Renderer::BlendFunction::SourceAlpha, Renderer::BlendFunction::OneMinusSourceAlpha);
     Renderer::setClearColor(Color4(0.0, 0.0, 0.0, 1.0));
 
     Trade::MeshData3D cube = barPrimitive(Vector3(1.0f, 1.0f, 1.0f));
